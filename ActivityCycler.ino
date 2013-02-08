@@ -1,44 +1,60 @@
 const byte ACTIVITY_CONTROL_PIN = 13;
-const byte ACTIVE = HIGH;
-const byte INACTIVE = LOW;
-
 const unsigned long SERIAL_SPEED = 9600;
 const byte SERIAL_CONFIG = SERIAL_8N1;
 
-const unsigned long UPDATE_INTERVAL = 100;  // 100 ms
-
-String commandBuffer;
-
-boolean running = false;
-byte state = INACTIVE;
+boolean isRunning = false;
+boolean isActive = false;
 
 const int MAX_NUM_INTERVALS = 100;
 const unsigned long MAX_INTERVAL = 10800;  // 3 hours
 unsigned long intervals[MAX_NUM_INTERVALS];
 int numIntervals = 0;
 int currentInterval = 0;
+unsigned long currentIntervalStartTime = 0;
+
+String commandBuffer;
 
 
 void setup() {
-    Serial.begin(SERIAL_SPEED, SERIAL_CONFIG);
     pinMode(ACTIVITY_CONTROL_PIN, OUTPUT);
+    Serial.begin(SERIAL_SPEED, SERIAL_CONFIG);
 }
 
 
 void loop() {
-    if (running) {
-        digitalWrite(ACTIVITY_CONTROL_PIN, ACTIVE); 
-    } else {
-        digitalWrite(ACTIVITY_CONTROL_PIN, INACTIVE);
+    if (!isRunning)
+        return;
+    
+    const unsigned long currentTime = millis();
+    
+    if ((currentTime - currentIntervalStartTime) <
+        (1000ul * intervals[currentInterval])) {
+        return;
     }
 
-    delay(UPDATE_INTERVAL);
+    boolean state = isActive;
+
+    do {
+        currentInterval++;
+        if (currentInterval == numIntervals) {
+            setActive(false);
+            isRunning = false;
+            Serial.println("DONE");
+            return;
+        }
+        state = !state;
+    } while (intervals[currentInterval] == 0);
+
+    setActive(state);
+    currentIntervalStartTime = currentTime;
 }
 
 
-void setState(byte newState) {
-    digitalWrite(ACTIVITY_CONTROL_PIN, newState);
-    state = newState;
+void setActive(boolean state) {
+    if (isActive != state) {
+        digitalWrite(ACTIVITY_CONTROL_PIN, (state ? HIGH : LOW));
+        isActive = state;
+    }
 }
 
 
@@ -68,6 +84,11 @@ void processCommand(const String &command) {
 
 
 void processRunCommand(const String &args) {
+    if (isRunning) {
+        Serial.println("ERROR already running");
+        return;
+    }
+    
     int fromIndex = 0;
     numIntervals = 0;
 
@@ -84,8 +105,11 @@ void processRunCommand(const String &args) {
         numIntervals++;
     }
 
-    currentInterval = 0;
-    running = true;
+    if  (numIntervals > 0) {  // Sanity check -- should always be true
+        currentInterval = 0;
+        currentIntervalStartTime = millis();
+        isRunning = true;
+    }
 
     Serial.print("OK RUN");
     for (int i = 0; i < numIntervals; i++) {
@@ -99,7 +123,9 @@ void processRunCommand(const String &args) {
 
 
 void processStopCommand() {
-    setState(INACTIVE);
-    running = false;
+    if (isRunning) {
+        setActive(false);
+        isRunning = false;
+    }
     Serial.println("OK STOP");
 }
