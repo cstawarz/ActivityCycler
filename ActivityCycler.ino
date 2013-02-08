@@ -36,6 +36,12 @@ void loop() {
 }
 
 
+void setState(byte newState) {
+    digitalWrite(ACTIVITY_CONTROL_PIN, newState);
+    state = newState;
+}
+
+
 void serialEvent() {
     while (Serial.available()) {
         char nextByte = Serial.read();
@@ -51,52 +57,49 @@ void serialEvent() {
 
 
 void processCommand(const String &command) {
-    boolean ok = false;
-    
     if (command.startsWith("RUN ")) {
-        ok = processRunCommand(command);
+        processRunCommand(command.substring(4));
     } else if (command == "STOP") {
-        running = false;
-        ok = true;
+        processStopCommand();
     } else {
-        Serial.println("Invalid command");
-    }
-
-    if (ok) {
-        Serial.println("OK");
+        Serial.println("ERROR invalid command");
     }
 }
 
 
-boolean processRunCommand(const String &command) {
+void processRunCommand(const String &args) {
+    int fromIndex = 0;
     numIntervals = 0;
-    unsigned int fromIndex = 4;
 
-    while (fromIndex < command.length()) {
-        if (numIntervals >= MAX_NUM_INTERVALS) {
-            Serial.println("Too many intervals");
-            return false;
-        }
-
-        int toIndex = command.indexOf(',', fromIndex);
+    while (fromIndex < args.length() &&
+           numIntervals < MAX_NUM_INTERVALS) {
+        int toIndex = args.indexOf(',', fromIndex);
         if (toIndex == -1)
-            toIndex = command.length();
+            toIndex = args.length();
 
-        int value = command.substring(fromIndex, toIndex).toInt();
+        int value = args.substring(fromIndex, toIndex).toInt();
         intervals[numIntervals] = constrain(value, 0, MAX_INTERVAL);
 
-        numIntervals++;
         fromIndex = toIndex + 1;
+        numIntervals++;
     }
-
-    for (int i = 0; i < numIntervals; i++) {
-        Serial.print(intervals[i]);
-        Serial.print(' ');
-    }
-    Serial.println("");
 
     currentInterval = 0;
     running = true;
-    
-    return true;
+
+    Serial.print("OK RUN");
+    for (int i = 0; i < numIntervals; i++) {
+        Serial.print(' ');
+        Serial.print(intervals[i]);
+        if (i < numIntervals - 1)
+            Serial.print(',');
+    }
+    Serial.println("");
+}
+
+
+void processStopCommand() {
+    setState(INACTIVE);
+    running = false;
+    Serial.println("OK STOP");
 }
