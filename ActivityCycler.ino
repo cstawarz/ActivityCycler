@@ -7,6 +7,7 @@ boolean isActive = false;
 
 const int MAX_NUM_INTERVALS = 100;
 const unsigned long MAX_INTERVAL = 10800;  // 3 hours
+const unsigned long SECONDS_TO_MILLIS = 1000;
 unsigned long intervals[MAX_NUM_INTERVALS];
 int numIntervals = 0;
 int currentInterval = 0;
@@ -28,7 +29,7 @@ void loop() {
     const unsigned long currentTime = millis();
     
     if ((currentTime - currentIntervalStartTime) <
-        (1000ul * intervals[currentInterval])) {
+        (intervals[currentInterval] * SECONDS_TO_MILLIS)) {
         return;
     }
 
