@@ -1,6 +1,7 @@
-const byte ACTIVITY_CONTROL_PIN = 13;
-const unsigned long SERIAL_SPEED = 9600;
-const byte SERIAL_CONFIG = SERIAL_8N1;
+//#define DEBUG
+
+const byte ACTIVITY_CONTROL_PIN = 12;   // Arbitrary
+const byte RUNNING_INDICATOR_PIN = 13;  // Built-in LED
 
 boolean isRunning = false;
 boolean isActive = false;
@@ -13,11 +14,18 @@ int numIntervals = 0;
 int currentInterval = 0;
 unsigned long currentIntervalStartTime = 0;
 
+const unsigned long SERIAL_SPEED = 9600;
+const byte SERIAL_CONFIG = SERIAL_8N1;
 String commandBuffer;
 
 
 void setup() {
+    // Configure outputs
     pinMode(ACTIVITY_CONTROL_PIN, OUTPUT);
+    pinMode(RUNNING_INDICATOR_PIN, OUTPUT);
+
+    // Set up communciation
+    commandBuffer.reserve(200);
     Serial.begin(SERIAL_SPEED, SERIAL_CONFIG);
 }
 
@@ -38,9 +46,10 @@ void loop() {
     do {
         currentInterval++;
         if (currentInterval == numIntervals) {
-            setActive(false);
-            isRunning = false;
+            setRunning(false);
+#ifdef DEBUG
             Serial.println("DONE");
+#endif
             return;
         }
         state = !state;
@@ -51,10 +60,24 @@ void loop() {
 }
 
 
+void setRunning(boolean state) {
+    if (isRunning != state) {
+        if (!state) {
+            setActive(false);
+        }
+        digitalWrite(RUNNING_INDICATOR_PIN, (state ? HIGH : LOW));
+        isRunning = state;
+    }
+}
+
+
 void setActive(boolean state) {
     if (isActive != state) {
         digitalWrite(ACTIVITY_CONTROL_PIN, (state ? HIGH : LOW));
         isActive = state;
+#ifdef DEBUG
+        Serial.println(state ? "ACTIVE" : "INACTIVE");
+#endif
     }
 }
 
@@ -66,25 +89,27 @@ void serialEvent() {
         if (nextByte == '\n') {
             commandBuffer.trim();
             commandBuffer.toUpperCase();
-            processCommand(commandBuffer);
+            handleCommand(commandBuffer);
             commandBuffer = "";
         }
     }
 }
 
 
-void processCommand(const String &command) {
+void handleCommand(const String &command) {
     if (command.startsWith("RUN ")) {
-        processRunCommand(command.substring(4));
+        handleRunCommand(command.substring(4));
     } else if (command == "STOP") {
-        processStopCommand();
+        handleStopCommand();
+    } else if (command == "STATUS") {
+        handleStatusCommand();
     } else {
         Serial.println("ERROR invalid command");
     }
 }
 
 
-void processRunCommand(const String &args) {
+void handleRunCommand(const String &args) {
     if (isRunning) {
         Serial.println("ERROR already running");
         return;
@@ -106,10 +131,10 @@ void processRunCommand(const String &args) {
         numIntervals++;
     }
 
-    if  (numIntervals > 0) {  // Sanity check -- should always be true
+    if (numIntervals > 0) {  // Sanity check -- should always be true
         currentInterval = 0;
         currentIntervalStartTime = millis();
-        isRunning = true;
+        setRunning(true);
     }
 
     Serial.print("OK RUN");
@@ -123,10 +148,13 @@ void processRunCommand(const String &args) {
 }
 
 
-void processStopCommand() {
-    if (isRunning) {
-        setActive(false);
-        isRunning = false;
-    }
+void handleStopCommand() {
+    setRunning(false);
     Serial.println("OK STOP");
+}
+
+
+void handleStatusCommand() {
+    Serial.print("OK STATUS ");
+    Serial.println(isRunning ? "RUNNING" : "STOPPED");
 }
