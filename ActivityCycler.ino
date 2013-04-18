@@ -1,10 +1,9 @@
-//#define DEBUG
-
 const byte ACTIVITY_CONTROL_PIN = 12;   // Arbitrary
 const byte RUNNING_INDICATOR_PIN = 13;  // Built-in LED
 
 boolean isRunning = false;
 boolean isActive = false;
+boolean isVerbose = false;
 
 const int MAX_NUM_INTERVALS = 100;
 const unsigned long MAX_INTERVAL = 10800;  // 3 hours
@@ -47,9 +46,9 @@ void loop() {
         currentInterval++;
         if (currentInterval == numIntervals) {
             setRunning(false);
-#ifdef DEBUG
-            Serial.println("DONE");
-#endif
+            if (isVerbose) {
+                Serial.println("DONE");
+            }
             return;
         }
         state = !state;
@@ -75,9 +74,9 @@ void setActive(boolean state) {
     if (isActive != state) {
         digitalWrite(ACTIVITY_CONTROL_PIN, (state ? HIGH : LOW));
         isActive = state;
-#ifdef DEBUG
-        Serial.println(state ? "ACTIVE" : "INACTIVE");
-#endif
+        if (isVerbose) {
+            Serial.println(state ? "ACTIVE" : "INACTIVE");
+        }
     }
 }
 
@@ -98,7 +97,9 @@ void serialEvent() {
 
 void handleCommand(const String &command) {
     if (command.startsWith("RUN ")) {
-        handleRunCommand(command.substring(4));
+        handleRunCommand(command.substring(4), false);
+    } else if (command.startsWith("DEBUG ")) {
+        handleRunCommand(command.substring(6), true);
     } else if (command == "STOP") {
         handleStopCommand();
     } else if (command == "STATUS") {
@@ -109,11 +110,13 @@ void handleCommand(const String &command) {
 }
 
 
-void handleRunCommand(const String &args) {
+void handleRunCommand(const String &args, boolean verbose) {
     if (isRunning) {
         Serial.println("ERROR already running");
         return;
     }
+
+    isVerbose = verbose;
     
     int fromIndex = 0;
     numIntervals = 0;
@@ -145,6 +148,10 @@ void handleRunCommand(const String &args) {
             Serial.print(',');
     }
     Serial.println("");
+    
+    if (isVerbose) {
+        Serial.println("INACTIVE");
+    }
 }
 
 
